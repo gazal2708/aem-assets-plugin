@@ -87,10 +87,20 @@ async function loadCSS(href) {
  * @param {string} alt The image alt text
  * @param {boolean} eager Whether to load the image eagerly
  * @param {object[]} breakpoints The breakpoints to use
+ * @param {string} imageFormat The image format to use
  * @returns {Element} The picture element
  *
  */
-export function createOptimizedPicture(src, alt = '', eager = false, breakpoints = [{ media: '(min-width: 600px)', width: '2000' }, { width: '750' }]) {
+export function createOptimizedPicture({
+  src,
+  alt = '',
+  eager = false,
+  breakpoints = [
+    { media: '(min-width: 600px)', width: '2000' },
+    { width: '750' }
+  ],
+  imageFormat = 'webp'
+}) {
   const url = new URL(src);
   const picture = document.createElement('picture');
   const { pathname } = url;
@@ -100,8 +110,8 @@ export function createOptimizedPicture(src, alt = '', eager = false, breakpoints
   breakpoints.forEach((br) => {
     const source = document.createElement('source');
     if (br.media) source.setAttribute('media', br.media);
-    source.setAttribute('type', 'image/webp');
-    const searchParams = new URLSearchParams({ width: br.width, format: 'webply' });
+    source.setAttribute('type', `image/${imageFormat}`);
+    const searchParams = new URLSearchParams({ width: br.width, format: imageFormat });
     source.setAttribute('srcset', appendQueryParams(url, searchParams));
     picture.appendChild(source);
   });
@@ -259,7 +269,7 @@ export function decorateExternalImages(ele, deliveryMarker) {
       }
 
       const extImageSrc = extImage.getAttribute('href');
-      const extPicture = createOptimizedPicture(extImageSrc);
+      const extPicture = createOptimizedPicture({src: extImageSrc});
 
       /* copy query params from link to img */
       const extImageUrl = new URL(extImageSrc);
@@ -300,10 +310,46 @@ export function decorateImagesFromAlt(ele = document) {
 
       const newPictureElement = isDMOpenAPIUrl(deliveryUrl)
         ? createOptimizedPictureWithSmartcrop(deliveryUrl, altText)
-        : createOptimizedPicture(deliveryUrl, altText);
+        : createOptimizedPicture({src: deliveryUrl, alt: altText});
       pictureElement.parentElement.replaceChild(newPictureElement, pictureElement);
     } catch (error) {
       // Do nothing
+    }
+  });
+}
+
+/**
+ * Converts img tags to picture elements when their src URL matches a specified external prefix
+ * @param {Element} ele The element
+ * @param {string} externalurlprefix The prefix to match for external images
+ * @example
+ * decorateExternalImageswithprefix(main, 'https://example.com/assets/');
+ */
+export function decorateExternalImageswithprefix(ele, externalurlprefix) {
+  const extImages = ele.querySelectorAll('img');
+  extImages.forEach((extImage) => {
+    const extImageSrc = extImage.getAttribute('src');
+    if (extImageSrc && extImageSrc.startsWith(externalurlprefix)) {
+      const extPicture = createOptimizedPicture({src: extImageSrc, imageFormat: 'avif' });
+
+      /* copy query params from img to sources */
+      const extImageUrl = new URL(extImageSrc);
+      const { searchParams } = extImageUrl;
+      extPicture.querySelectorAll('source, img').forEach((child) => {
+
+        if (child.tagName === 'SOURCE') {
+          const srcset = child.getAttribute('srcset');
+          if (srcset) {
+            child.setAttribute('srcset', appendQueryParams(new URL(srcset, extImageSrc), searchParams));
+          }
+        } else if (child.tagName === 'IMG') {
+          const src = child.getAttribute('src');
+          if (src) {
+            child.setAttribute('src', appendQueryParams(new URL(src, extImageSrc), searchParams));
+          }
+        }
+      });
+      extImage.parentNode.replaceChild(extPicture, extImage);
     }
   });
 }
@@ -328,7 +374,7 @@ export async function loadBlock(block) {
             const mod = await import(
               `${basePath}/blocks/${blockName}/${blockName}.js`
             );
-            if (mod.default) {
+            if (mod.default) {  
               await mod.default(block);
             }
           } catch (error) {
