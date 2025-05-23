@@ -449,7 +449,6 @@ export async function loadBlock(block) {
               `${basePath}/blocks/${blockName}/${blockName}.js`
             );
             if (mod.default) {  
-            if (mod.default) {  
               await mod.default(block);
             }
           } catch (error) {
