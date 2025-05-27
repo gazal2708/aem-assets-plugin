@@ -48,61 +48,60 @@ function getImageSrcUrl(element) {
  * Checks if an element is an external image.
  * @param {Element} element The element
  * @param {string} externalImageMarker The marker for external images
- * @returns {Object} Object containing isExternal (boolean) and imageFormat (string or null)
+ * @returns {Object} Object containing isExternal (boolean) and createOptimizedPictureHandler (function or null)
  * @private
  */
 function isExternalImage(element, externalImageMarker) {
   
   // Skip images that are inside picture elements
   if (element.tagName === 'IMG' && element.closest('picture')) {
-    return { isExternal: false, imageFormat: null };
+    return { isExternal: false, createOptimizedPictureHandler: null };
   }
 
   // For img tags, check if URL matches any external image URL prefix
   if (element.tagName === 'IMG') {
     const url = getImageSrcUrl(element);
-    if (!url) return { isExternal: false, imageFormat: null };
+    if (!url) return { isExternal: false, createOptimizedPictureHandler: null };
     
     // Check if matches any external image URL prefix
-    let imageFormat = null;
+    let createOptimizedPictureHandler = null;
     let isExternalUrl = false;
     
     // Iterate through the prefixes to find a match
     for (const prefixItem of window.hlx.aemassets.externalImageUrlPrefixes) {
-      // If prefixItem is a tuple [prefix, format]
+      // If prefixItem is a tuple [prefix, creatorType]
       if (Array.isArray(prefixItem) && prefixItem.length === 2) {
-        const [prefix, format] = prefixItem;
+        const [prefix, createOptimizedPictureHandlerFunction] = prefixItem;
         if (url.startsWith(prefix)) {
           isExternalUrl = true;
-          imageFormat = format;
-          break;
-        }
-      } else {
-        // For backward compatibility - if it's just a string
-        if (url.startsWith(prefixItem)) {
-          isExternalUrl = true;
+          createOptimizedPictureHandler = createOptimizedPictureHandlerFunction
           break;
         }
       }
     }
     
-    if (!isExternalUrl) return { isExternal: false, imageFormat: null };
+    if (!isExternalUrl) return { isExternal: false, createOptimizedPictureHandler: null };
     
-    return { isExternal: hasImageExtension(url), imageFormat };
+    return { isExternal: hasImageExtension(url), createOptimizedPictureHandler };
   }
 
   // Handle anchor elements with marker text
   if (element.tagName === 'A' && element.textContent.trim() === externalImageMarker) {
-    return { isExternal: true, imageFormat: null };
+    return { isExternal: true, createOptimizedPictureHandler: createOptimizedPicture };
   }
   
   // Handle anchor elements based on URL
   if (element.tagName === 'A') {
-    return { isExternal: hasImageExtension(getImageSrcUrl(element)), imageFormat: null };
+    const url = getImageSrcUrl(element);
+    if (!url) return { isExternal: false, createOptimizedPictureHandler: null };
+    
+    // Determine which picture creator to use based on URL patterns
+    let createOptimizedPictureHandler = createOptimizedPicture;
+    return { isExternal: hasImageExtension(url), createOptimizedPictureHandler };
   }
   
   // Not an img or anchor element
-  return { isExternal: false, imageFormat: null };
+  return { isExternal: false, createOptimizedPictureHandler: null };
 }
 
 /*
@@ -154,21 +153,10 @@ async function loadCSS(href) {
  * @param {string} alt The image alt text
  * @param {boolean} eager Whether to load the image eagerly
  * @param {object[]} breakpoints The breakpoints to use
- * @param {string} imageFormat The image format to use
- * @param {string} imageFormat The image format to use
  * @returns {Element} The picture element
  *
  */
-export function createOptimizedPicture({
-  src,
-  alt = '',
-  eager = false,
-  breakpoints = [
-    { media: '(min-width: 600px)', width: '2000' },
-    { width: '750' }
-  ],
-  imageFormat = 'webp'
-}) {
+export function createOptimizedPicture(src, alt = '', eager = false, breakpoints = [{ media: '(min-width: 600px)', width: '2000' }, { width: '750' }] ) {
   const url = new URL(src);
   const picture = document.createElement('picture');
   const { pathname } = url;
@@ -178,8 +166,8 @@ export function createOptimizedPicture({
   breakpoints.forEach((br) => {
     const source = document.createElement('source');
     if (br.media) source.setAttribute('media', br.media);
-    source.setAttribute('type', `image/${imageFormat}`);
-    const searchParams = new URLSearchParams({ width: br.width, format: imageFormat });
+    source.setAttribute('type', 'image/webp');
+    const searchParams = new URLSearchParams({ width: br.width, format: 'webply' });
     source.setAttribute('srcset', appendQueryParams(url, searchParams));
     picture.appendChild(source);
   });
@@ -215,13 +203,12 @@ export function createOptimizedPicture({
  * @param {string} imageFormat The image format to use
  * @returns {Element} The picture element
  */
-export function createOptimizedPictureWithSmartcrop({
+export function createOptimizedPictureWithSmartcrop(
   src,
   alt = '',
   eager = false,
-  breakpoints = [],
-  imageFormat = 'webp'
-}) {
+  breakpoints = []
+) {
   const isAbsoluteUrl = /^https?:\/\//i.test(src);
 
   // initialise breakpoint to project level smartcrop config unless needed to customise
@@ -242,8 +229,8 @@ export function createOptimizedPictureWithSmartcrop({
   smartcropBreakpoints.forEach((br) => {
     const source = document.createElement('source');
     if (br.media) source.setAttribute('media', br.media);
-    source.setAttribute('type', `image/${imageFormat}`);
-    const searchParams = new URLSearchParams({ smartcrop: br.smartcrop, format: imageFormat });
+    source.setAttribute('type', 'image/webp');
+    const searchParams = new URLSearchParams({ smartcrop: br.smartcrop, format: 'webply' });
     source.setAttribute('srcset', appendQueryParams(url, searchParams));
     picture.appendChild(source);
   });
@@ -266,6 +253,146 @@ export function createOptimizedPictureWithSmartcrop({
   img.setAttribute('src', url.toString());
 
   picture.classList.add('smartcrop');
+  return picture;
+}
+
+
+/**
+ * Creates an optimized picture element for Scene7 images.
+ * @param {string} src The image source URL
+ * @param {string} alt The image alt text
+ * @param {boolean} eager Whether to load the image eagerly
+ * @param {object[]} breakpoints The breakpoints to use
+ * @returns {Element} The picture element
+ *
+ */
+export function createOptimizedPictureForDM(
+  src,
+  alt = '',
+  eager = false,
+  breakpoints = [{ media: '(min-width: 600px)', width: '2000' }, { width: '750' }]
+) {
+  
+  const picture = document.createElement('picture');
+  const url = new URL(src);
+
+  // jpeg sources
+  breakpoints.forEach((br) => {
+    const source = document.createElement('source');
+    if (br.media) source.setAttribute('media', br.media);
+    source.setAttribute('type', 'image/jpeg');
+    const searchParams = new URLSearchParams({ width: br.width });
+    source.setAttribute('srcset', appendQueryParams(url, searchParams));
+    picture.appendChild(source);
+  });
+
+  // fallback
+  breakpoints.forEach((br, i) => {
+    const searchParams = new URLSearchParams({ width: br.width });
+
+    if (i < breakpoints.length - 1) {
+      const source = document.createElement('source');
+      if (br.media) source.setAttribute('media', br.media);
+      source.setAttribute('srcset', appendQueryParams(url, searchParams));
+      picture.appendChild(source);
+    } else {
+      const img = document.createElement('img');
+      img.setAttribute('loading', eager ? 'eager' : 'lazy');
+      img.setAttribute('alt', alt);
+      picture.appendChild(img);
+      img.setAttribute('src', appendQueryParams(url, searchParams));
+    }
+  });
+  
+
+  return picture;
+}
+
+/**
+ * Creates an optimized picture element for DM OpenAPI images.
+ * @param {string} src The image source URL
+ * @param {string} alt The image alt text
+ * @param {boolean} useSmartcrop Whether to use smartcrop
+ * @param {boolean} eager Whether to load the image eagerly
+ * @param {object[]} breakpoints The breakpoints to use
+ * @returns {Element} The picture element
+ *
+ */
+export function createOptimizedPictureForDMOpenAPI(
+  src,
+  alt = '',
+  useSmartcrop = false,
+  eager = false,
+  breakpoints = [{ media: '(min-width: 600px)', width: '2000' }, { width: '750' }]
+) {
+  const picture = document.createElement('picture');
+  const isAbsoluteUrl = /^https?:\/\//i.test(src);
+  const url = isAbsoluteUrl ? new URL(src) : new URL(src, window.location.href);
+  
+  // Determine which breakpoints to use
+  let finalBreakpoints = breakpoints;
+  if (useSmartcrop && window.hlx?.aemassets?.smartCrops && breakpoints.length === 0) {
+    finalBreakpoints = Object.entries(window.hlx.aemassets.smartCrops).map(
+      ([name, { minWidth, maxWidth }]) => ({
+        media: `(min-width: ${minWidth}px) and (max-width: ${maxWidth}px)`,
+        smartcrop: name,
+        width: maxWidth || '2000',
+      })
+    );
+  }
+
+  // Create sources
+  finalBreakpoints.forEach((br) => {
+    const source = document.createElement('source');
+    if (br.media) source.setAttribute('media', br.media);
+    source.setAttribute('type', 'image/avif');
+    
+    const searchParams = new URLSearchParams({ width: br.width || '2000' });
+    if (useSmartcrop && br.smartcrop) {
+      searchParams.set('smartcrop', br.smartcrop);
+    }
+    
+    source.setAttribute('srcset', appendQueryParams(url, searchParams));
+    picture.appendChild(source);
+  });
+
+  // Create fallback sources (for non-last breakpoints)
+  finalBreakpoints.forEach((br, i) => {
+    if (i < finalBreakpoints.length - 1) {
+      const source = document.createElement('source');
+      if (br.media) source.setAttribute('media', br.media);
+      
+      const searchParams = new URLSearchParams({ width: br.width || '2000' });
+      if (useSmartcrop && br.smartcrop) {
+        searchParams.set('smartcrop', br.smartcrop);
+      }
+      
+      source.setAttribute('srcset', appendQueryParams(url, searchParams));
+      picture.appendChild(source);
+    }
+  });
+
+  // Create default img element (from last breakpoint or without smartcrop)
+  const img = document.createElement('img');
+  img.setAttribute('loading', eager ? 'eager' : 'lazy');
+  img.setAttribute('alt', alt || '');
+  picture.appendChild(img);
+  
+  // For the image src, either use the last breakpoint or a clean URL
+  if (finalBreakpoints.length > 0) {
+    const lastBreakpoint = finalBreakpoints[finalBreakpoints.length - 1];
+    const searchParams = new URLSearchParams({ width: lastBreakpoint.width || '2000' });
+    img.setAttribute('src', appendQueryParams(url, searchParams));
+  } else {
+    img.setAttribute('src', url.toString());
+  }
+
+  // Add smartcrop class if using smartcrop
+  if (useSmartcrop) {
+    picture.classList.add('smartcrop');
+    picture.setAttribute('data-smartcrop-status', 'loaded');
+  }
+
   return picture;
 }
 
@@ -348,35 +475,35 @@ function markSmartCropImages(ele = document) {
   * decorateExternalImages(main, '//External Image//');
   */
 export function decorateExternalImages(ele, deliveryMarker) {
-
   // apply data-smartcrop-status=loading to all potential <a> tags
   markSmartCropImages(ele);
 
-  const extImages = ele.querySelectorAll('a, img');
-
+  const extImages = ele.querySelectorAll('a,img');
   extImages.forEach((extImage) => {
-    const { isExternal, imageFormat } = isExternalImage(extImage, deliveryMarker);
+    const { isExternal, createOptimizedPictureHandler } = isExternalImage(extImage, deliveryMarker);
     if (isExternal) {
       // check if needs to render smartcrop
       const renderSmartCrop = extImage.getAttribute('data-smartcrop-status');
       const extImageSrc = getImageSrcUrl(extImage);
-
-      if (!extImageSrc) return; // Skip if no source found
       
-      if (renderSmartCrop === 'loading') {
-        const extPicture = createOptimizedPictureWithSmartcrop({
-          src: extImageSrc,
-          imageFormat: imageFormat || 'webp' // Use provided imageFormat or default to 'webp'
-        });
-        extPicture.setAttribute('data-smartcrop-status', 'loaded');
-        extImage.parentNode.replaceChild(extPicture, extImage);
-        return;
-      }
+      if (!extImageSrc) return; // Skip if no source found
 
-      const extPicture = createOptimizedPicture({
-        src: extImageSrc,
-        imageFormat: imageFormat || 'webp' // Use provided imageFormat or default to 'webp'
-      });
+      // Use the provided picture creator function or fall back to default
+      let extPicture;
+      if (createOptimizedPictureHandler) {
+        const useSmartcrop = renderSmartCrop === 'loading';
+        extPicture = createOptimizedPictureHandler(extImageSrc,null,useSmartcrop);
+      } else {  
+        // if smartcrop is loading, render smartcrop
+        if (renderSmartCrop === 'loading') {
+          const extPicture = createOptimizedPictureWithSmartcrop(extImageSrc);
+          extPicture.setAttribute('data-smartcrop-status', 'loaded');
+          extImage.parentNode.replaceChild(extPicture, extImage);
+          return;
+        }
+
+        extPicture = createOptimizedPicture(extImageSrc);
+      }
 
       /* copy query params from link to img */
       const extImageUrl = new URL(extImageSrc);
@@ -416,11 +543,9 @@ export function decorateImagesFromAlt(ele = document) {
       }
 
       const newPictureElement = isDMOpenAPIUrl(deliveryUrl)
-        ? createOptimizedPictureWithSmartcrop({
-            src: deliveryUrl, 
-            alt: altText
-          })
-        : createOptimizedPicture({src: deliveryUrl, alt: altText});
+        ? createOptimizedPictureForDMOpenAPI(deliveryUrl, altText,true,)
+        : createOptimizedPictureForDM(deliveryUrl,altText);
+      
       pictureElement.parentElement.replaceChild(newPictureElement, pictureElement);
     } catch (error) {
       // Do nothing
