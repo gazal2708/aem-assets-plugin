@@ -49,13 +49,11 @@ function getImageSrcUrl(element) {
  * @param {Element} element The element
  * @param {string} externalImageMarker The marker for external images
  * @returns {Object} Object containing isExternal (boolean) and createOptimizedPictureHandler (function or null)
- * @returns {Object} Object containing isExternal (boolean) and createOptimizedPictureHandler (function or null)
  * @private
  */
 function isExternalImage(element, externalImageMarker) {
   // Skip images that are inside picture elements
-  if (element.tagName === 'IMG' && element.closest('picture')) {
-    return { isExternal: false, createOptimizedPictureHandler: null };
+  if (element.tagName === 'IMG' && element.parentNode.tagName === 'PICTURE') {
     return { isExternal: false, createOptimizedPictureHandler: null };
   }
 
@@ -63,19 +61,15 @@ function isExternalImage(element, externalImageMarker) {
   if (element.tagName === 'IMG') {
     const url = getImageSrcUrl(element);
     if (!url) return { isExternal: false, createOptimizedPictureHandler: null };
-    if (!url) return { isExternal: false, createOptimizedPictureHandler: null };
     
     // Check if matches any external image URL prefix
-    let createOptimizedPictureHandler = null;
     let createOptimizedPictureHandler = null;
     let isExternalUrl = false;
     
     // Iterate through the prefixes to find a match
     for (const prefixItem of window.hlx.aemassets.externalImageUrlPrefixes) {
       // If prefixItem is a tuple [prefix, creatorType]
-      // If prefixItem is a tuple [prefix, creatorType]
       if (Array.isArray(prefixItem) && prefixItem.length === 2) {
-        const [prefix, createOptimizedPictureHandlerFunction] = prefixItem;
         const [prefix, createOptimizedPictureHandlerFunction] = prefixItem;
         if (url.startsWith(prefix)) {
           isExternalUrl = true;
@@ -86,15 +80,12 @@ function isExternalImage(element, externalImageMarker) {
     }
     
     if (!isExternalUrl) return { isExternal: false, createOptimizedPictureHandler: null };
-    if (!isExternalUrl) return { isExternal: false, createOptimizedPictureHandler: null };
     
-    return { isExternal: hasImageExtension(url), createOptimizedPictureHandler };
     return { isExternal: hasImageExtension(url), createOptimizedPictureHandler };
   }
 
   // Handle anchor elements with marker text
   if (element.tagName === 'A' && element.textContent.trim() === externalImageMarker) {
-    return { isExternal: true, createOptimizedPictureHandler: createOptimizedPicture };
     return { isExternal: true, createOptimizedPictureHandler: createOptimizedPicture };
   }
   
@@ -106,16 +97,9 @@ function isExternalImage(element, externalImageMarker) {
     // Determine which picture creator to use based on URL patterns
     let createOptimizedPictureHandler = createOptimizedPicture;
     return { isExternal: hasImageExtension(url), createOptimizedPictureHandler };
-    const url = getImageSrcUrl(element);
-    if (!url) return { isExternal: false, createOptimizedPictureHandler: null };
-    
-    // Determine which picture creator to use based on URL patterns
-    let createOptimizedPictureHandler = createOptimizedPicture;
-    return { isExternal: hasImageExtension(url), createOptimizedPictureHandler };
   }
   
   // Not an img or anchor element
-  return { isExternal: false, createOptimizedPictureHandler: null };
   return { isExternal: false, createOptimizedPictureHandler: null };
 }
 
@@ -188,8 +172,6 @@ export function createOptimizedPicture(
     if (br.media) source.setAttribute('media', br.media);
     source.setAttribute('type', 'image/webp');
     const searchParams = new URLSearchParams({ width: br.width, format: 'webply' });
-    source.setAttribute('type', 'image/webp');
-    const searchParams = new URLSearchParams({ width: br.width, format: 'webply' });
     source.setAttribute('srcset', appendQueryParams(url, searchParams));
     picture.appendChild(source);
   });
@@ -225,12 +207,9 @@ export function createOptimizedPicture(
  * @returns {Element} The picture element
  */
 export function createOptimizedPictureWithSmartcrop(
-export function createOptimizedPictureWithSmartcrop(
   src,
   alt = '',
   eager = false,
-  breakpoints = []
-) {
   breakpoints = []
 ) {
   const isAbsoluteUrl = /^https?:\/\//i.test(src);
@@ -253,8 +232,6 @@ export function createOptimizedPictureWithSmartcrop(
   smartcropBreakpoints.forEach((br) => {
     const source = document.createElement('source');
     if (br.media) source.setAttribute('media', br.media);
-    source.setAttribute('type', 'image/webp');
-    const searchParams = new URLSearchParams({ smartcrop: br.smartcrop, format: 'webply' });
     source.setAttribute('type', 'image/webp');
     const searchParams = new URLSearchParams({ smartcrop: br.smartcrop, format: 'webply' });
     source.setAttribute('srcset', appendQueryParams(url, searchParams));
@@ -305,14 +282,14 @@ export function createOptimizedPictureForDM(
     const source = document.createElement('source');
     if (br.media) source.setAttribute('media', br.media);
     source.setAttribute('type', 'image/jpeg');
-    const searchParams = new URLSearchParams({ width: br.width });
+    const searchParams = new URLSearchParams({ width: br.width, fmt: 'jpeg' });
     source.setAttribute('srcset', appendQueryParams(url, searchParams));
     picture.appendChild(source);
   });
 
   // fallback
   breakpoints.forEach((br, i) => {
-    const searchParams = new URLSearchParams({ width: br.width });
+    const searchParams = new URLSearchParams({ width: br.width, fmt: 'jpeg' });
 
     if (i < breakpoints.length - 1) {
       const source = document.createElement('source');
@@ -453,7 +430,7 @@ function markSmartCropImages(ele = document) {
     extImages.push(...ele.querySelectorAll('a'));
     // Add img tags that are not inside picture elements
     ele.querySelectorAll('img').forEach(img => {
-      if (!img.closest('picture')) {
+      if (img.parentNode.tagName !== 'PICTURE') {
         extImages.push(img);
       }
     });
@@ -462,7 +439,7 @@ function markSmartCropImages(ele = document) {
     extImages.push(...ele.querySelectorAll('.smartcrop a'));
     // Add img tags that are not inside picture elements
     ele.querySelectorAll('.smartcrop img').forEach(img => {
-      if (!img.closest('picture')) {
+      if (img.parentNode.tagName !== 'PICTURE') {
         extImages.push(img);
       }
     });
@@ -472,7 +449,7 @@ function markSmartCropImages(ele = document) {
         extImages.push(...parentSection.querySelectorAll('a'));
         // Add img tags that are not inside picture elements
         parentSection.querySelectorAll('img').forEach(img => {
-          if (!img.closest('picture')) {
+          if (img.parentNode.tagName !== 'PICTURE') {
             extImages.push(img);
           }
         });
@@ -502,15 +479,12 @@ export function decorateExternalImages(ele, deliveryMarker) {
   markSmartCropImages(ele);
 
   const extImages = ele.querySelectorAll('a,img');
-  const extImages = ele.querySelectorAll('a,img');
   extImages.forEach((extImage) => {
-    const { isExternal, createOptimizedPictureHandler } = isExternalImage(extImage, deliveryMarker);
     const { isExternal, createOptimizedPictureHandler } = isExternalImage(extImage, deliveryMarker);
     if (isExternal) {
       // check if needs to render smartcrop
       const renderSmartCrop = extImage.getAttribute('data-smartcrop-status');
       const extImageSrc = getImageSrcUrl(extImage);
-      
       
       if (!extImageSrc) return; // Skip if no source found
 
@@ -528,8 +502,6 @@ export function decorateExternalImages(ele, deliveryMarker) {
           return;
         }
 
-        extPicture = createOptimizedPicture(extImageSrc);
-      }
         extPicture = createOptimizedPicture(extImageSrc);
       }
 
