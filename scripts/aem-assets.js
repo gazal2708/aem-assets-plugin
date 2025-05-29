@@ -47,67 +47,43 @@ function getImageSrcUrl(element) {
 /**
  * Checks if an element is an external image.
  * @param {Element} element The element
- * @param {string} externalImageMarker The marker for external images
  * @returns {Object} Object containing isExternal (boolean) and createOptimizedPictureHandler (function or null)
  * @private
  */
-function isExternalImage(element, externalImageMarker) {
-  // Skip images that are inside picture elements
-  if (element.tagName === 'IMG' && element.parentNode.tagName === 'PICTURE') {
+function isExternalImage(element) {
+  // Skip non-anchor and image elements that are inside picture elements
+  if ((element.tagName === 'IMG' && element.parentNode && element.parentNode.tagName === 'PICTURE') || element.tagName !== 'A') {
     return { isExternal: false, createOptimizedPictureHandler: null };
   }
-
-  // For img tags, check if URL matches any external image URL prefix
-  if (element.tagName === 'IMG') {
-    const url = getImageSrcUrl(element);
-    if (!url) return { isExternal: false, createOptimizedPictureHandler: null };
-    
-    // Check if matches any external image URL prefix
-    let createOptimizedPictureHandler = null;
-    let isExternalUrl = false;
-    
-    // Iterate through the prefixes to find a match
+  const url = getImageSrcUrl(element);
+  if (!url) return { isExternal: false, createOptimizedPictureHandler: null };
+  
+  let createOptimizedPictureHandlerFunction = null;
+  let isExternalUrl = false;
+  
+  // Iterate through the prefixes to find a match
+  if (window.hlx.aemassets?.externalImageUrlPrefixes) {
     for (const prefixItem of window.hlx.aemassets.externalImageUrlPrefixes) {
       // If prefixItem is a tuple [prefix, creatorType]
       if (Array.isArray(prefixItem) && prefixItem.length === 2) {
-        const [prefix, createOptimizedPictureHandlerFunction] = prefixItem;
+        const [prefix, handlerFunction] = prefixItem;
         if (url.startsWith(prefix)) {
           isExternalUrl = true;
-          createOptimizedPictureHandler = createOptimizedPictureHandlerFunction;
+          createOptimizedPictureHandlerFunction = handlerFunction;
           break;
         }
       }
     }
-    
-    if (!isExternalUrl) return { isExternal: false, createOptimizedPictureHandler: null };
-    
-    return { isExternal: hasImageExtension(url), createOptimizedPictureHandler };
-  }
-
-  // Handle anchor elements with marker text
-  if (element.tagName === 'A' && element.textContent.trim() === externalImageMarker) {
-    return { isExternal: true, createOptimizedPictureHandler: createOptimizedPicture };
   }
   
-  // Handle anchor elements based on URL
-  if (element.tagName === 'A') {
-    const url = getImageSrcUrl(element);
-    if (!url) return { isExternal: false, createOptimizedPictureHandler: null };
-    
-    // Determine which picture creator to use based on URL patterns
-    let createOptimizedPictureHandler = createOptimizedPicture;
-    return { isExternal: hasImageExtension(url), createOptimizedPictureHandler };
-  }
-  
-  // Not an img or anchor element
-  return { isExternal: false, createOptimizedPictureHandler: null };
+  return { isExternal: isExternalUrl, createOptimizedPictureHandler: createOptimizedPictureHandlerFunction };
 }
 
 /*
-  * Appends query params to a URL. Only allows query params as per Assets Delivery API - https://adobe-aem-assets-delivery.redoc.ly/
-  * @param {string} url The URL to append query params to
-  * @param {object} params The query params to append
-  * @returns {string} The URL with query params appended
+  * Appends query params to a URL. Only allows query params as per Assets Delivery API - https://adobe-aem-assets-delivery.redoc.ly/ and DM Documentation - https://experienceleague.adobe.com/en/docs/dynamic-media-developer-resources/image-serving-api/image-serving-api/http-protocol-reference/command-reference/c-command-reference
+  * @param {URL} url The URL object to append query params to
+  * @param {URLSearchParams} params The query params to append
+  * @returns {string} The URL string with query params appended
   * @private
   * @example
   * appendQueryParams('https://example.com', { foo: 'bar' });
@@ -115,8 +91,8 @@ function isExternalImage(element, externalImageMarker) {
 */
 function appendQueryParams(url, params) {
   const { searchParams } = url;
-  // only allow query params as per Assets Delivery API - https://adobe-aem-assets-delivery.redoc.ly/
-  const allowedParams = ['rotate', 'crop', 'flip', 'size', 'preferwebp', 'height', 'width', 'quality', 'smartcrop'];
+  // only allow query params as per Assets Delivery API and DM Documentation
+  const allowedParams = ['rotate', 'crop', 'flip', 'size', 'preferwebp', 'height', 'width', 'quality', 'smartcrop','fmt','wid','hei'];
   params.forEach((value, key) => {
     if (allowedParams.includes(key)) {
       searchParams.set(key, value);
@@ -282,14 +258,14 @@ export function createOptimizedPictureForDM(
     const source = document.createElement('source');
     if (br.media) source.setAttribute('media', br.media);
     source.setAttribute('type', 'image/jpeg');
-    const searchParams = new URLSearchParams({ width: br.width, fmt: 'jpeg' });
+    const searchParams = new URLSearchParams({ wid: br.width, fmt: 'jpeg' });
     source.setAttribute('srcset', appendQueryParams(url, searchParams));
     picture.appendChild(source);
   });
 
   // fallback
   breakpoints.forEach((br, i) => {
-    const searchParams = new URLSearchParams({ width: br.width, fmt: 'jpeg' });
+    const searchParams = new URLSearchParams({ wid: br.width, fmt: 'jpeg' });
 
     if (i < breakpoints.length - 1) {
       const source = document.createElement('source');
@@ -331,7 +307,7 @@ export function createOptimizedPictureForDMOpenAPI(
   
   // Determine which breakpoints to use
   let finalBreakpoints = breakpoints;
-  if (useSmartcrop && window.hlx?.aemassets?.smartCrops && breakpoints.length === 0) {
+  if (useSmartcrop && window.hlx?.aemassets?.smartCrops) {
     finalBreakpoints = Object.entries(window.hlx.aemassets.smartCrops).map(
       ([name, { minWidth, maxWidth }]) => ({
         media: `(min-width: ${minWidth}px) and (max-width: ${maxWidth}px)`,
@@ -398,6 +374,9 @@ export function createOptimizedPictureForDMOpenAPI(
 
 /**
  * to check if given src is a DM OpenAPI URL
+ * @param {string} src The URL to check
+ * @returns {boolean} True if the URL is a DM OpenAPI URL, false otherwise.
+ * @private
  */
 function isDMOpenAPIUrl(src) {
   return /^(https?:\/\/(.*)\/adobe\/assets\/urn:aaid:aem:(.*))/gm.test(src);
@@ -405,6 +384,8 @@ function isDMOpenAPIUrl(src) {
 
 /**
  * to check if the page contains meta tag for smartcrop rendering
+ * @returns {boolean} True if meta tag for smartcrop is present and true, false otherwise.
+ * @private
  */
 function hasImageSmartcropMeta() {
   const metaTags = document.getElementsByTagName('meta');
@@ -415,6 +396,8 @@ function hasImageSmartcropMeta() {
 /**
  * to mark all the external images with smart crop on the page and set data-smartcrop-status=loading
  * if the image is a DM OpenAPI URL
+ * @param {Element} ele The element to search within. Defaults to document.
+ * @private
  */
 function markSmartCropImages(ele = document) {
   // Early return if smartcrop config is missing
@@ -469,18 +452,18 @@ function markSmartCropImages(ele = document) {
 /*
   * Decorates external images with a picture element
   * @param {Element} ele The element
-  * @param {string} deliveryMarker The marker for external images
   * @private
   * @example
-  * decorateExternalImages(main, '//External Image//');
+  * decorateExternalImages(main);
   */
-export function decorateExternalImages(ele, deliveryMarker) {
-  // apply data-smartcrop-status=loading to all potential <a> tags
+export function decorateExternalImages(ele) {
+
+  // apply data-smartcrop-status=loading to all potential <a> ,<img> tags
   markSmartCropImages(ele);
 
   const extImages = ele.querySelectorAll('a,img');
   extImages.forEach((extImage) => {
-    const { isExternal, createOptimizedPictureHandler } = isExternalImage(extImage, deliveryMarker);
+    const { isExternal, createOptimizedPictureHandler } = isExternalImage(extImage);
     if (isExternal) {
       // check if needs to render smartcrop
       const renderSmartCrop = extImage.getAttribute('data-smartcrop-status');
@@ -488,22 +471,9 @@ export function decorateExternalImages(ele, deliveryMarker) {
       
       if (!extImageSrc) return; // Skip if no source found
 
-      // Use the provided picture creator function or fall back to default
-      let extPicture;
-      if (createOptimizedPictureHandler) {
-        const useSmartcrop = renderSmartCrop === 'loading';
-        extPicture = createOptimizedPictureHandler(extImageSrc, null, useSmartcrop);
-      } else {  
-        // if smartcrop is loading, render smartcrop
-        if (renderSmartCrop === 'loading') {
-          const extPicture = createOptimizedPictureWithSmartcrop(extImageSrc);
-          extPicture.setAttribute('data-smartcrop-status', 'loaded');
-          extImage.parentNode.replaceChild(extPicture, extImage);
-          return;
-        }
-
-        extPicture = createOptimizedPicture(extImageSrc);
-      }
+      // Use the provided picture creator function to create the picture element
+      const useSmartcrop = renderSmartCrop === 'loading';
+      const extPicture = createOptimizedPictureHandler(extImageSrc,'',useSmartcrop);
 
       /* copy query params from link to img */
       const extImageUrl = new URL(extImageSrc);
@@ -543,8 +513,8 @@ export function decorateImagesFromAlt(ele = document) {
       }
 
       const newPictureElement = isDMOpenAPIUrl(deliveryUrl)
-        ? createOptimizedPictureForDMOpenAPI(deliveryUrl, altText, true)
-        : createOptimizedPictureForDM(deliveryUrl, altText);
+      ? createOptimizedPictureWithSmartcrop(deliveryUrl, altText)
+      : createOptimizedPicture(deliveryUrl, altText);
       
       pictureElement.parentElement.replaceChild(newPictureElement, pictureElement);
     } catch (error) {
