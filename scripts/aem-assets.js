@@ -30,18 +30,43 @@ function hasImageExtension(url) {
 }
 
 /**
- * Gets the source URL from an element based on its tag name
+ * Gets the source URL and alt text from an element.
+ * Handles `<a>` tags and `<img>` tags.
+ * For `<img>` tags inside `<picture>`, it attempts to parse the alt attribute
+ * returns a JSON object with deliveryUrl and altText.
  * @param {Element} element The element (img or a)
- * @returns {string|null} The source URL from src or href attribute
+ * @returns {{url: string|null, alt: string}}
+ *   - url: The determined image URL.
+ *   - alt: The alt text, defaulting to an empty string.
  * @private
  */
-function getImageSrcUrl(element) {
-  if (element.tagName === 'IMG') {
-    return element.getAttribute('src');
-  } else if (element.tagName === 'A') {
-    return element.getAttribute('href');
+function getImageSrcUrlAndAlt(element) {
+  if (element.tagName === 'A') {
+    return { url: element.getAttribute('href'), alt: '' };
   }
-  return null;
+
+  if (element.tagName === 'IMG') {
+    // For images inside a picture, try to get URL from alt attribute
+    if (element.parentNode?.tagName === 'PICTURE') {
+      const altAttr = element.getAttribute('alt');
+      if (altAttr) {
+        try {
+          const deliveryObject = JSON.parse(decodeURIComponent(altAttr));
+          const { deliveryUrl, altText } = deliveryObject;
+          if (deliveryUrl) {
+            return { url: deliveryUrl, alt: altText || '' };
+          }
+        } catch (e) {
+          // Not a JSON alt, fall back to src
+        }
+      }
+      return { url: null, alt: '' };
+    }
+    // For standalone images
+    return { url: element.getAttribute('src'), alt: element.getAttribute('alt') || '' };
+  }
+
+  return { url: null, alt: '' };
 }
 
 /**
@@ -51,11 +76,12 @@ function getImageSrcUrl(element) {
  * @private
  */
 function isExternalImage(element) {
-  // Skip non-anchor and image elements that are inside picture elements
-  if ((element.tagName === 'IMG' && element.parentNode && element.parentNode.tagName === 'PICTURE') || element.tagName !== 'A') {
+  // Allow both <img> and <a> tags
+  if (element.tagName !== 'IMG' && element.tagName !== 'A') {
     return { isExternal: false, createOptimizedPictureHandler: null };
   }
-  const url = getImageSrcUrl(element);
+
+  const { url } = getImageSrcUrlAndAlt(element);
   if (!url) return { isExternal: false, createOptimizedPictureHandler: null };
   
   let createOptimizedPictureHandlerFunction = null;
@@ -92,7 +118,7 @@ function isExternalImage(element) {
 function appendQueryParams(url, params) {
   const { searchParams } = url;
   // only allow query params as per Assets Delivery API and DM Documentation
-  const allowedParams = ['rotate', 'crop', 'flip', 'size', 'preferwebp', 'height', 'width', 'quality', 'smartcrop','fmt','wid','hei'];
+  const allowedParams = ['rotate', 'crop', 'flip', 'size', 'height', 'width', 'quality', 'smartcrop','fmt','wid','hei'];
   params.forEach((value, key) => {
     if (allowedParams.includes(key)) {
       searchParams.set(key, value);
@@ -251,7 +277,8 @@ export function createOptimizedPictureForDM(
   breakpoints = [{ media: '(min-width: 600px)', width: '2000' }, { width: '750' }]
 ) {
   const picture = document.createElement('picture');
-  const url = new URL(src);
+  const isAbsoluteUrl = /^https?:\/\//i.test(src);
+  const url = isAbsoluteUrl ? new URL(src) : new URL(src, window.location.href);
 
   // jpeg sources
   breakpoints.forEach((br) => {
@@ -413,7 +440,7 @@ function markSmartCropImages(ele = document) {
     extImages.push(...ele.querySelectorAll('a'));
     // Add img tags that are not inside picture elements
     ele.querySelectorAll('img').forEach(img => {
-      if (img.parentNode.tagName !== 'PICTURE') {
+      if (img.parentNode?.tagName !== 'PICTURE') {
         extImages.push(img);
       }
     });
@@ -422,7 +449,7 @@ function markSmartCropImages(ele = document) {
     extImages.push(...ele.querySelectorAll('.smartcrop a'));
     // Add img tags that are not inside picture elements
     ele.querySelectorAll('.smartcrop img').forEach(img => {
-      if (img.parentNode.tagName !== 'PICTURE') {
+      if (img.parentNode?.tagName !== 'PICTURE') {
         extImages.push(img);
       }
     });
@@ -432,7 +459,7 @@ function markSmartCropImages(ele = document) {
         extImages.push(...parentSection.querySelectorAll('a'));
         // Add img tags that are not inside picture elements
         parentSection.querySelectorAll('img').forEach(img => {
-          if (img.parentNode.tagName !== 'PICTURE') {
+          if (img.parentNode?.tagName !== 'PICTURE') {
             extImages.push(img);
           }
         });
@@ -442,8 +469,8 @@ function markSmartCropImages(ele = document) {
 
   // Apply the data-smartcrop-status attribute to all collected images if a DM OpenAPI URL
   extImages.forEach((extImage) => {
-    const src = getImageSrcUrl(extImage);
-    if (src && isDMOpenAPIUrl(src)) {
+    const { url } = getImageSrcUrlAndAlt(extImage);
+    if (url && isDMOpenAPIUrl(url)) {
       extImage.setAttribute('data-smartcrop-status', 'loading');
     }
   });
@@ -467,13 +494,13 @@ export function decorateExternalImages(ele) {
     if (isExternal) {
       // check if needs to render smartcrop
       const renderSmartCrop = extImage.getAttribute('data-smartcrop-status');
-      const extImageSrc = getImageSrcUrl(extImage);
+      const { extImageSrc, alt } = getImageSrcUrlAndAlt(extImage);
       
       if (!extImageSrc) return; // Skip if no source found
 
       // Use the provided picture creator function to create the picture element
       const useSmartcrop = renderSmartCrop === 'loading';
-      const extPicture = createOptimizedPictureHandler(extImageSrc,'',useSmartcrop);
+      const extPicture = createOptimizedPictureHandler(extImageSrc, alt, useSmartcrop);
 
       /* copy query params from link to img */
       const extImageUrl = new URL(extImageSrc);
@@ -496,33 +523,6 @@ export function decorateExternalImages(ele) {
   });
 }
 
-/**
- * Decorates all images in a container element and replace media urls with delivery urls.
- * @param {Element} ele The container element
- */
-export function decorateImagesFromAlt(ele = document) {
-  const pictureElements = ele.querySelectorAll('picture');
-  [...pictureElements].forEach((pictureElement) => {
-    const imgElement = pictureElement.querySelector('img');
-    const alt = imgElement.getAttribute('alt');
-    try {
-      const deliveryObject = JSON.parse(decodeURIComponent(alt));
-      const { deliveryUrl, altText } = deliveryObject;
-      if (!deliveryUrl) {
-        return;
-      }
-
-      const newPictureElement = isDMOpenAPIUrl(deliveryUrl)
-      ? createOptimizedPictureWithSmartcrop(deliveryUrl, altText)
-      : createOptimizedPicture(deliveryUrl, altText);
-      
-      pictureElement.parentElement.replaceChild(newPictureElement, pictureElement);
-    } catch (error) {
-      // Do nothing
-    }
-  });
-}
-
 export async function loadBlock(block) {
   const status = block.dataset.blockStatus;
   if (status !== 'loading' && status !== 'loaded') {
@@ -535,7 +535,6 @@ export async function loadBlock(block) {
         basePath = `${window.hlx.codeBasePath}${window.hlx.aemassets.codeBasePath}`;
       }
       decorateExternalImages(block);
-      decorateImagesFromAlt(block);
       const cssLoaded = loadCSS(`${basePath}/blocks/${blockName}/${blockName}.css`);
       const decorationComplete = new Promise((resolve) => {
         (async () => {
@@ -543,7 +542,7 @@ export async function loadBlock(block) {
             const mod = await import(
               `${basePath}/blocks/${blockName}/${blockName}.js`
             );
-            if (mod.default) {  
+            if (mod.default) {
               await mod.default(block);
             }
           } catch (error) {
