@@ -106,7 +106,7 @@ function isExternalImage(element) {
 }
 
 /*
-  * Appends query params to a URL. Only allows query params as per Assets Delivery API - https://adobe-aem-assets-delivery.redoc.ly/ and DM Documentation - https://experienceleague.adobe.com/en/docs/dynamic-media-developer-resources/image-serving-api/image-serving-api/http-protocol-reference/command-reference/c-command-reference
+  * Appends query params to a URL.
   * @param {URL} url The URL object to append query params to
   * @param {URLSearchParams} params The query params to append
   * @returns {string} The URL string with query params appended
@@ -117,12 +117,8 @@ function isExternalImage(element) {
 */
 function appendQueryParams(url, params) {
   const { searchParams } = url;
-  // only allow query params as per Assets Delivery API and DM Documentation
-  const allowedParams = ['rotate', 'crop', 'flip', 'size', 'height', 'width', 'quality', 'smartcrop','fmt','wid','hei'];
   params.forEach((value, key) => {
-    if (allowedParams.includes(key)) {
       searchParams.set(key, value);
-    }
   });
   url.search = searchParams.toString();
   return url.toString();
@@ -494,7 +490,7 @@ export function decorateExternalImages(ele) {
     if (isExternal) {
       // check if needs to render smartcrop
       const renderSmartCrop = extImage.getAttribute('data-smartcrop-status');
-      const { extImageSrc, alt } = getImageSrcUrlAndAlt(extImage);
+      const { url: extImageSrc, alt } = getImageSrcUrlAndAlt(extImage);
       
       if (!extImageSrc) return; // Skip if no source found
 
