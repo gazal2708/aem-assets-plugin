@@ -12,8 +12,22 @@
  * // returns ''
  * get_url_extension('https://example.com/foo.jpg#qux');
  * // returns 'jpg'
+ * get_url_extension('https://delivery-p66302-e574366.adobeaemcloud.com/adobe/assets/urn:aaid:aem:db6f951a-3865-42cf-ad38-13a33cff9e75/as/candy-dessert-tiered-cake-43305.avif?assetname=candy%20dessert%20tiered%20cake%2043305.jpg');
+ * // returns 'jpg'
  */
 function getUrlExtension(url) {
+  const urlObj = new URL(url);
+  
+  // Check if there's an assetname query parameter with an extension
+  const assetname = urlObj.searchParams.get('assetname');
+  if (assetname) {
+    const assetnameExt = assetname.split('.').pop().trim().toLowerCase();
+    if (assetnameExt && assetnameExt !== assetname) {
+      return assetnameExt;
+    }
+  }
+  
+  // Fall back to original logic
   return url.split(/[#?]/)[0].split('.').pop().trim();
 }
 
@@ -27,6 +41,36 @@ function hasImageExtension(url) {
   if (!url) return false;
   const ext = getUrlExtension(url);
   return ext && ['jpg', 'jpeg', 'png', 'gif', 'webp','avif'].includes(ext.toLowerCase());
+}
+
+
+/**
+ * Converts DM OpenAPI URLs from /original/ format to /as/ format with assetname parameter
+ * @param {URL} url The URL to convert
+ * @returns {URL} The converted URL or original URL if not a DM OpenAPI URL
+ * @private
+ * @example
+ * createWebOptimizedDMOpenAPIUrl(new URL('https://delivery-p66302-e574366.adobeaemcloud.com/adobe/assets/urn:aaid:aem:9ead338d-4ac8-483a-a1cd-a3c7dfe9f437/original/as/article_01_hero.png'));
+ * // returns URL('https://delivery-p66302-e574366.adobeaemcloud.com/adobe/assets/urn:aaid:aem:9ead338d-4ac8-483a-a1cd-a3c7dfe9f437/as/article_01_hero.avif?assetname=article_01_hero.png')
+ */
+function createWebOptimizedDMOpenAPIUrl(url) {
+  const pathname = url.pathname;
+  // Check if URL contains /original/as/ pattern
+  if (pathname.includes('/original/as/')) {
+    // Extract the filename from the path
+    const filename = pathname.split('/').pop();
+    // Replace /original/as/ with /as/ and change extension to .avif
+    const newPathname = pathname
+      .replace('/original/as/', '/as/')
+      .replace(/\.[^.]+$/, '.avif');
+    // Create new URL with modified pathname
+    const newUrl = new URL(url.toString());
+    newUrl.pathname = newPathname;
+    // Add assetname parameter with original filename
+    newUrl.searchParams.set('assetname', filename);
+    return newUrl;
+  }
+  return url;
 }
 
 /**
@@ -83,6 +127,11 @@ function isExternalImage(element) {
 
   const { url } = getImageSrcUrlAndAlt(element);
   if (!url) return { isExternal: false, createOptimizedPictureHandler: null };
+
+    // If it's an anchor tag and the URL doesn't have an image extension, return false
+    if (element.tagName === 'A' && !hasImageExtension(url)) {
+      return { isExternal: false, createOptimizedPictureHandler: null };
+    }
   
   let createOptimizedPictureHandlerFunction = null;
   let isExternalUrl = false;
@@ -326,7 +375,8 @@ export function createOptimizedPictureForDMOpenAPI(
 ) {
   const picture = document.createElement('picture');
   const isAbsoluteUrl = /^https?:\/\//i.test(src);
-  const url = isAbsoluteUrl ? new URL(src) : new URL(src, window.location.href);
+  const originalUrl= isAbsoluteUrl ? new URL(src) : new URL(src, window.location.href);
+  const url = createWebOptimizedDMOpenAPIUrl(originalUrl);
   
   // Determine which breakpoints to use
   let finalBreakpoints = breakpoints;
