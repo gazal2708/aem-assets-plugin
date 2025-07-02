@@ -14,6 +14,7 @@ The AEM Assets Plugin helps you quickly integrate with AEM Assets for your AEM p
 And you need to have pre-configured:
 - [AEM Assets Sidekick plugin](https://www.aem.live/docs/aem-assets-sidekick-plugin) if using Doc based authoring OR
 - [Universal Editor Custom Asset Picker](https://developer.adobe.com/uix/docs/extension-manager/extension-developed-by-adobe/configurable-asset-picker/) if using Universal Editor based authoring
+- While adding custom components in your custom asset picker make sure `imageMimeType` is not present in the custom component model to leverage Dynamic Media Delivery Capabilities 
 
 ## Retention of External Image URLs (New Feature)
 When converting HTML documents to Markdown, images are typically processed and their URLs rewritten for internal delivery (e.g., via /media_...). For Adobe Experience Manager (AEM) assets delivered through Dynamic Media with open API (DMwOAPI) or Scene7, rewriting these URLs can prevent the use of advanced features provided by DMwOAPI.
