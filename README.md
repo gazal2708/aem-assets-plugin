@@ -15,6 +15,26 @@ And you need to have pre-configured:
 - [AEM Assets Sidekick plugin](https://www.aem.live/docs/aem-assets-sidekick-plugin) if using Doc based authoring OR
 - [Universal Editor Custom Asset Picker](https://developer.adobe.com/uix/docs/extension-manager/extension-developed-by-adobe/configurable-asset-picker/) if using Universal Editor based authoring
 
+## Retention of External Image URLs (New Feature)
+When converting HTML documents to Markdown, images are typically processed and their URLs rewritten for internal delivery (e.g., via /media_...). For Adobe Experience Manager (AEM) assets delivered through Dynamic Media with open API (DMwOAPI) or Scene7, rewriting these URLs can prevent the use of advanced features provided by DMwOAPI.
+
+This feature allows you to configure prefixes for external asset url's, so images with matching URLs are retained in the Markdown output, while all other images are processed as usual
+
+## How to Enable Retention of External Image URLs Feature 
+This feature is opt-in and must be enabled by Adobe for your organization/site.
+To request this feature, reach out to Adobe and provide the following information:
+
+`site-name`, `org-name`, `List of Image Delivery URL prefixes to retain`
+
+Example: 
+
+site-name : hac-poc ,
+org-name : adobeorg, 
+List of Image Delivery URL prefixes to retain : ['https://delivery-p66302-e574366.adobeaemcloud.com/, 'https://s7ap1.scene7.com/is/image/varuncloudready/']
+
+Adobe will enable this feature for your specified site and organization. Once enabled, images matching the provided prefix will be retained as external URLs as described above. 
+
+
 ## Installation
 
 Add the plugin to your AEM project by running:
@@ -35,138 +55,74 @@ fatal: can't squash-merge: 'plugins/aem-assets-plugin' was never added
 ```
 you can just delete the folder and re-add the plugin via the `git subtree add` command above.
 
-## Project instrumentation
+## Updating project configuration
 
-To properly connect and configure the plugin for your project, you'll need to edit both the `aem.js` and `scripts.js` in your AEM project and add a new file `aem-assets-plugin-support.js` in the `scripts` folder.
-
-> **Note:** All the changes described below can also be seen consolidated in this [git commit](https://github.com/hlxsites/franklin-assets-selector/commit/f512e9b10d752971136fef476402826b61d07f45).
-
+To properly connect and configure the plugin for your project, you'll need to edit ⁣scripts.js in your AEM project and add a new file aem-assets-plugin-support.js inside  scripts folder.
 
 Here's typically how `scripts/aem-assets-plugin-support.js` would look:
 
 ```
 // The based path of the aem-assets-plugin code.
 const codeBasePath = `${window.hlx?.codeBasePath}/plugins/aem-assets-plugin`;
-
+ 
 // The blocks that are to be used from the aem-assets-plugin.
 const blocks = ['video'];
-
+ 
 // Initialize the aem-assets-plugin.
 export default async function assetsInit() {
-  const { loadBlock, createOptimizedPicture } = await import(`${codeBasePath}/scripts/aem-assets.js`);
+  const {
+    loadBlock,
+    createOptimizedPicture,
+    decorateExternalImages,
+    createOptimizedPictureForDMOpenAPI,
+    createOptimizedPictureForDM,
+  } = await import(`${codeBasePath}/scripts/aem-assets.js`);
   window.hlx = window.hlx || {};
   window.hlx.aemassets = {
     codeBasePath,
     blocks,
     loadBlock,
     createOptimizedPicture,
+    decorateExternalImages,
+    createOptimizedPictureForDMOpenAPI,
+    createOptimizedPictureForDM,
+    smartCrops: {
+      Small: { minWidth: 0, maxWidth: 767 },
+      Medium: { minWidth: 768, maxWidth: 1023 },
+      Large: { minWidth: 1024, maxWidth: 9999 },
+    },
+    externalImageUrlPrefixes: [
+      ['https://delivery-p66302-e574366.adobeaemcloud.com/', createOptimizedPictureForDMOpenAPI],
+      ['https://s7ap1.scene7.com/is/image/varuncloudready/', createOptimizedPictureForDM],
+    ],
   };
 }
 ```
 
-You'd need to add the following code in `createOptimizedPicture` in `aem.js` to call the overidden version of this function
+The externalImageUrlPrefixes is a list of URL prefix-handler tuple pairs. For any image URL that starts with a matching prefix, the corresponding handler function (e.g., createOptimizedPictureForDMOpenAPI or createOptimizedPictureForDM) will be used to process that image
+
+You'd need to add the following code for handling external images inside decorateMain Function in `scripts.js` 
+
 ```
-  if (window.hlx?.aemassets?.createOptimizedPicture) {
-    return window.hlx.aemassets.createOptimizedPicture(src, alt, eager, breakpoints);
-  }
-```
-
-Here's the complete code for `createOptimizedPicture` in `aem.js` with the above lines of code added
-```
-function createOptimizedPicture(
-  src,
-  alt = '',
-  eager = false,
-  breakpoints = [{ media: '(min-width: 600px)', width: '2000' }, { width: '750' }],
-) {
-
-  // Add below lines of code //
-  if (window.hlx?.aemassets?.createOptimizedPicture) {
-    return window.hlx.aemassets.createOptimizedPicture(src, alt, eager, breakpoints);
-  }
-  // Add above lines of code //
-
-  const url = new URL(src, window.location.href);
-  const picture = document.createElement('picture');
-  const { pathname } = url;
-  const ext = pathname.substring(pathname.lastIndexOf('.') + 1);
-
-  // webp
-  breakpoints.forEach((br) => {
-    const source = document.createElement('source');
-    if (br.media) source.setAttribute('media', br.media);
-    source.setAttribute('type', 'image/webp');
-    source.setAttribute('srcset', `${pathname}?width=${br.width}&format=webply&optimize=medium`);
-    picture.appendChild(source);
-  });
-
-  // fallback
-  breakpoints.forEach((br, i) => {
-    if (i < breakpoints.length - 1) {
-      const source = document.createElement('source');
-      if (br.media) source.setAttribute('media', br.media);
-      source.setAttribute('srcset', `${pathname}?width=${br.width}&format=${ext}&optimize=medium`);
-      picture.appendChild(source);
-    } else {
-      const img = document.createElement('img');
-      img.setAttribute('loading', eager ? 'eager' : 'lazy');
-      img.setAttribute('alt', alt);
-      picture.appendChild(img);
-      img.setAttribute('src', `${pathname}?width=${br.width}&format=${ext}&optimize=medium`);
-    }
-  });
-
-  return picture;
+if (window.hlx.aemassets?.decorateExternalImages) {
+    window.hlx.aemassets.decorateExternalImages(main);
 }
 ```
 
-You'd need to add the following code in `loadBlock` in `aem.js` to call the overidden version of this function
-```
-  if (window.hlx?.aemassets?.loadBlock) {
-    return window.hlx.aemassets.loadBlock(block);
-  }
-```
+Here is the updated version of `decorateMain` function
 
-Here's the complete code for `loadBlock` in `aem.js` with the above lines of code added
 ```
-async function loadBlock(block) {
-
-  // Add below lines of code //
-  if (window.hlx?.aemassets?.loadBlock) {
-    return window.hlx.aemassets.loadBlock(block);
+export function decorateMain(main) {
+  if (window.hlx.aemassets?.decorateExternalImages) {
+    window.hlx.aemassets.decorateExternalImages(main);
   }
-  // Add above lines of code //
-
-  const status = block.dataset.blockStatus;
-  if (status !== 'loading' && status !== 'loaded') {
-    block.dataset.blockStatus = 'loading';
-    const { blockName } = block.dataset;
-    try {
-      const cssLoaded = loadCSS(`${window.hlx.codeBasePath}/blocks/${blockName}/${blockName}.css`);
-      const decorationComplete = new Promise((resolve) => {
-        (async () => {
-          try {
-            const mod = await import(
-              `${window.hlx.codeBasePath}/blocks/${blockName}/${blockName}.js`
-            );
-            if (mod.default) {
-              await mod.default(block);
-            }
-          } catch (error) {
-            // eslint-disable-next-line no-console
-            console.log(`failed to load module for ${blockName}`, error);
-          }
-          resolve();
-        })();
-      });
-      await Promise.all([cssLoaded, decorationComplete]);
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.log(`failed to load block ${blockName}`, error);
-    }
-    block.dataset.blockStatus = 'loaded';
-  }
-  return block;
+   
+  // hopefully forward compatible button decoration
+  decorateButtons(main);
+  decorateIcons(main);
+  buildAutoBlocks(main);
+  decorateSections(main);
+  decorateBlocks(main);
 }
 ```
 
