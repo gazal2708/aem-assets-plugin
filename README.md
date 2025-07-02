@@ -28,9 +28,9 @@ To request this feature, reach out to Adobe and provide the following informatio
 
 Example: 
 
-site-name : hac-poc ,
-org-name : adobeorg, 
-List of Image Delivery URL prefixes to retain : ['https://delivery-p66302-e574366.adobeaemcloud.com/, 'https://s7ap1.scene7.com/is/image/varuncloudready/']
+`site-name` : hac-poc,  
+`org-name` : adobeorg,   
+`List of Image Delivery URL prefixes to retain` : ['https://delivery-p66302-e574366.adobeaemcloud.com/, 'https://s7ap1.scene7.com/is/image/varuncloudready/']  
 
 Adobe will enable this feature for your specified site and organization. Once enabled, images matching the provided prefix will be retained as external URLs as described above. 
 
