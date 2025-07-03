@@ -16,7 +16,7 @@ And you need to have pre-configured:
 - [Universal Editor Custom Asset Picker](https://developer.adobe.com/uix/docs/extension-manager/extension-developed-by-adobe/configurable-asset-picker/) if using Universal Editor based authoring
 - While adding custom components in your custom asset picker make sure `imageMimeType` is not present in the custom component model to leverage Dynamic Media Delivery Capabilities 
 
-## Retention of External Image URLs (New Feature)
+## Retention of External Image URLs
 When converting HTML documents to Markdown, images are typically processed and their URLs rewritten for internal delivery (e.g., via /media_...). For Adobe Experience Manager (AEM) assets delivered through Dynamic Media with open API (DMwOAPI) or Scene7, rewriting these URLs can prevent the use of advanced features provided by DMwOAPI.
 
 This feature allows you to configure prefixes for external asset url's, so images with matching URLs are retained in the Markdown output, while all other images are processed as usual
@@ -58,7 +58,7 @@ you can just delete the folder and re-add the plugin via the `git subtree add` c
 
 ## Updating project configuration
 
-To properly connect and configure the plugin for your project, you'll need to edit ⁣scripts.js in your AEM project and add a new file aem-assets-plugin-support.js inside  scripts folder.
+To properly connect and configure the plugin for your project, you'll need to edit ⁣scripts.js in your AEM project and add a new file `aem-assets-plugin-support.js` inside  scripts folder.
 
 Here's typically how `scripts/aem-assets-plugin-support.js` would look:
 
@@ -124,6 +124,56 @@ export function decorateMain(main) {
   buildAutoBlocks(main);
   decorateSections(main);
   decorateBlocks(main);
+}
+```
+
+You'd need to add the following code in `loadBlock` in `aem.js` to call the overidden version of this function
+```
+  if (window.hlx?.aemassets?.loadBlock) {
+    return window.hlx.aemassets.loadBlock(block);
+  }
+```
+
+Here's the complete code for `loadBlock` in `aem.js` with the above lines of code added
+```
+async function loadBlock(block) {
+
+  // Add below lines of code //
+  if (window.hlx?.aemassets?.loadBlock) {
+    return window.hlx.aemassets.loadBlock(block);
+  }
+  // Add above lines of code //
+
+  const status = block.dataset.blockStatus;
+  if (status !== 'loading' && status !== 'loaded') {
+    block.dataset.blockStatus = 'loading';
+    const { blockName } = block.dataset;
+    try {
+      const cssLoaded = loadCSS(`${window.hlx.codeBasePath}/blocks/${blockName}/${blockName}.css`);
+      const decorationComplete = new Promise((resolve) => {
+        (async () => {
+          try {
+            const mod = await import(
+              `${window.hlx.codeBasePath}/blocks/${blockName}/${blockName}.js`
+            );
+            if (mod.default) {
+              await mod.default(block);
+            }
+          } catch (error) {
+            // eslint-disable-next-line no-console
+            console.log(`failed to load module for ${blockName}`, error);
+          }
+          resolve();
+        })();
+      });
+      await Promise.all([cssLoaded, decorationComplete]);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.log(`failed to load block ${blockName}`, error);
+    }
+    block.dataset.blockStatus = 'loaded';
+  }
+  return block;
 }
 ```
 
