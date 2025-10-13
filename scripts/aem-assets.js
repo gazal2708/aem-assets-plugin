@@ -286,15 +286,16 @@ export function createOptimizedPictureWithSmartcrop(
   breakpoints = [],
 ) {
   const isAbsoluteUrl = /^https?:\/\//i.test(src);
-
+ // check if the image type supports smart cropping
+ const canUseSmartCrop = supportsSmartCrop(src);
   // initialise breakpoint to project level smartcrop config unless needed to customise
   const smartcropBreakpoints = breakpoints.length !== 0 ? breakpoints
-    : Object.entries(window.hlx.aemassets?.smartCrops).map(
+    : (canUseSmartCrop ? Object.entries(window.hlx.aemassets?.smartCrops).map(
       ([name, { minWidth, maxWidth }]) => ({
         media: `(min-width: ${minWidth}px) and (max-width: ${maxWidth}px)`,
         smartcrop: name,
       }),
-    );
+    ) : []);
 
   const url = isAbsoluteUrl ? new URL(src) : new URL(src, window.location.href);
   const picture = document.createElement('picture');
@@ -313,7 +314,10 @@ export function createOptimizedPictureWithSmartcrop(
 
   // fallback for non-webp
   smartcropBreakpoints.forEach((br) => {
-    const searchParams = new URLSearchParams({ smartcrop: br.smartcrop, format: ext });
+    const searchParams = new URLSearchParams({ format: ext });
+    if (br.smartcrop) {
+      searchParams.set('smartcrop', br.smartcrop);
+    }
     const source = document.createElement('source');
     if (br.media) source.setAttribute('media', br.media);
     source.setAttribute('srcset', appendQueryParams(url, searchParams));
@@ -328,7 +332,9 @@ export function createOptimizedPictureWithSmartcrop(
   url.searchParams.delete('smartcrop');
   img.setAttribute('src', url.toString());
 
-  picture.classList.add('smartcrop');
+  if (canUseSmartCrop) {
+    picture.classList.add('smartcrop');
+  }
   return picture;
 }
 
@@ -542,7 +548,7 @@ function markSmartCropImages(ele = document) {
   // Apply the data-smartcrop-status attribute to all collected images if a DM OpenAPI URL
   extImages.forEach((extImage) => {
     const { url } = getImageSrcUrlAndAlt(extImage);
-    if (url && isDMOpenAPIUrl(url)) {
+    if (url && isDMOpenAPIUrl(url) && supportsSmartCrop(url)) {
       extImage.setAttribute('data-smartcrop-status', 'loading');
     }
   });
@@ -571,7 +577,7 @@ export function decorateExternalImages(ele) {
 
       // Use the provided picture creator function to create the picture element
       // Only enable smart crop if marked AND format supports it
-      const useSmartcrop = renderSmartCrop === 'loading' && supportsSmartCrop(extImageSrc);
+      const useSmartcrop = renderSmartCrop === 'loading';
       const extPicture = createOptimizedPictureHandler(extImageSrc, alt, useSmartcrop);
 
       /* copy query params from link to img */
