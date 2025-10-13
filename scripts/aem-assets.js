@@ -576,7 +576,6 @@ export function decorateExternalImages(ele) {
       if (!extImageSrc) return; // Skip if no source found
 
       // Use the provided picture creator function to create the picture element
-      // Only enable smart crop if marked AND format supports it
       const useSmartcrop = renderSmartCrop === 'loading';
       const extPicture = createOptimizedPictureHandler(extImageSrc, alt, useSmartcrop);
 
