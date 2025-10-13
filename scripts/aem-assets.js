@@ -307,7 +307,10 @@ export function createOptimizedPictureWithSmartcrop(
     const source = document.createElement('source');
     if (br.media) source.setAttribute('media', br.media);
     source.setAttribute('type', 'image/webp');
-    const searchParams = new URLSearchParams({ smartcrop: br.smartcrop, format: 'webply' });
+    const searchParams = new URLSearchParams({ format: 'webply' });
+    if (br.smartcrop) {
+      searchParams.set('smartcrop', br.smartcrop);
+    }
     source.setAttribute('srcset', appendQueryParams(url, searchParams));
     picture.appendChild(source);
   });
