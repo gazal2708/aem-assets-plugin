@@ -23,6 +23,11 @@ This feature allows you to configure prefixes for external asset url's, so image
 
 ## How to Enable Retention of External Image URLs Feature 
 This feature is opt-in and must be enabled by Adobe for your organization/site.
+
+Note:
+The `externalImageUrlPrefixes` feature is currently supported only with Universal Editor (UE)-based authoring modes, including Dark Alley and xwalk.
+It is not yet supported for document-based authoring. If you are using document-based authoring, this feature will not retain external asset URLs as described above.
+
 To request this feature, reach out to Adobe and provide the following information:
 
 `site-name`, `org-name`, `List of Image Delivery URL prefixes to retain`
