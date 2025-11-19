@@ -26,7 +26,7 @@ This feature is opt-in and must be enabled by Adobe for your organization/site.
 
 Note:
 The `externalImageUrlPrefixes` feature is currently supported only with Universal Editor (UE)-based authoring modes, including Dark Alley and xwalk.
-It is not yet supported for document-based authoring. If you are using document-based authoring, this feature will not retain external asset URLs as described above.
+If you are using document-based authoring, this feature will not retain external asset URLs OOTB at page source level however it can still be rewritten at Project level via adding the Assets Plugin to your EDS project.
 
 To request this feature, reach out to Adobe and provide the following information:
 
