@@ -23,6 +23,10 @@ This feature allows you to configure prefixes for external asset url's, so image
 
 ## How to Enable Retention of External Image URLs Feature 
 This feature is opt-in and must be enabled by Adobe for your organization/site.
+
+Note:
+The `externalImageUrlPrefixes` feature is currently supported only with Universal Editor (UE)-based authoring modes, including Dark Alley and xwalk.
+If you are using document-based authoring, this feature will not retain external asset URLs OOTB at page source level however it can still be rewritten at Project level via [adding the Assets Plugin](https://github.com/adobe-rnd/aem-assets-plugin/blob/main/README.md#installation) to your EDS project.
 To request this feature, reach out to Adobe and provide the following information:
 
 `site-name`, `org-name`, `List of Image Delivery URL prefixes to retain`
